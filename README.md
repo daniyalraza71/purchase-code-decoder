@@ -1,1 +1,612 @@
-# purchase-code-decoder
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Purchase Code Decoder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: one narrow column like a ledger page. Key strip on top, pricing rule, tabbed tool, saved list inside Decode. */
+:root {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bg: #F2F5FA;
+  --surface: #FFFFFF;
+  --fg: #131A2B;
+  --muted: #586179;
+  --line: #D6DDEA;
+  --tint: #E6EDF9;
+  --accent: #1D4EA8;
+  --accent-ink: #FFFFFF;
+  --warn: #9A4A06;
+  --warn-bg: #FDF0D5;
+  --ok: #0B6B50;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1322; --surface: #151D33; --fg: #E7ECF7; --muted: #98A3BC; --line: #28334F;
+    --tint: #1A2644; --accent: #86AAF4; --accent-ink: #0D1322; --warn: #F4B955; --warn-bg: #35290F; --ok: #5FD3AE;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1322; --surface: #151D33; --fg: #E7ECF7; --muted: #98A3BC; --line: #28334F;
+  --tint: #1A2644; --accent: #86AAF4; --accent-ink: #0D1322; --warn: #F4B955; --warn-bg: #35290F; --ok: #5FD3AE;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-block: 24px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 720px; margin-inline: auto; display: grid; gap: 22px; }
+.wrap > * { min-width: 0; }
+
+h1 { font: 700 1.75rem/1.15 var(--font-display); text-wrap: balance; margin: 0; }
+h2 { font: 600 1.05rem/1.3 var(--font-display); margin: 0; }
+.sub { color: var(--muted); margin: 6px 0 0; }
+.label { font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.hint { margin: 0; color: var(--muted); font-size: .88rem; }
+.empty { margin: 0; color: var(--muted); padding: 8px 0; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Key strip */
+.keyhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.keyword { font: 700 .95rem var(--font-mono); letter-spacing: .12em; }
+.keystrip { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 0 6px; }
+.cell { display: grid; justify-items: center; padding: 6px 0 4px; border-bottom: 2px solid var(--line); }
+.cell .l { font: 600 1.15rem/1.3 var(--font-mono); }
+.cell .d { font: 500 .9rem/1.3 var(--font-mono); color: var(--muted); }
+.cell[data-used="true"] { border-bottom-color: var(--accent); }
+.cell[data-used="true"] .d { color: var(--accent); font-weight: 700; }
+@media (max-width: 520px) {
+  .keystrip { grid-template-columns: repeat(5, minmax(0, 1fr)); row-gap: 10px; }
+}
+
+/* Pricing rule */
+.rule { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; }
+.field { display: grid; gap: 6px; }
+.field input, .field select { width: 110px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 10px; font: 600 .85rem var(--font-body); cursor: pointer; min-width: 44px;
+}
+.chip[aria-pressed="true"] { background: var(--tint); border-color: var(--accent); color: var(--accent); }
+
+input, select, textarea {
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 10px 12px; font: inherit; width: 100%;
+}
+textarea { font: 500 1rem/1.6 var(--font-mono); letter-spacing: .06em; resize: vertical; }
+.codein { font: 700 1.5rem/1.2 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; padding: 12px 14px; }
+
+.btn {
+  background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); border-radius: 6px;
+  padding: 10px 16px; font: 600 .95rem var(--font-body); cursor: pointer;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+.actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.status { font-size: .88rem; color: var(--ok); min-height: 1.2em; }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tab {
+  background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 10px 14px; font: 600 .95rem var(--font-body); color: var(--muted); cursor: pointer;
+}
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.panel { display: grid; gap: 16px; padding-top: 16px; }
+.panel > * { min-width: 0; }
+
+/* Result */
+.result {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 16px 20px;
+  padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+}
+.big { font: 700 clamp(1.6rem, 6.5vw, 2.3rem)/1.15 var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin-top: 4px; }
+.big.sell { color: var(--accent); }
+.profit { color: var(--muted); font-size: .9rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+.pairs { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.pair {
+  display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 9px; background: var(--tint);
+  border-radius: 6px; font: 600 .95rem var(--font-mono);
+}
+.pair.bad { background: var(--warn-bg); color: var(--warn); }
+.note { padding: 10px 12px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); font-size: .9rem; }
+
+/* Saved list */
+.histhead, .hrow { display: grid; grid-template-columns: minmax(0, 1fr) 96px 96px; gap: 12px; padding: 8px 4px; }
+.histhead { border-bottom: 1px solid var(--line); }
+.hrow {
+  width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line);
+  color: var(--fg); font: inherit; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.hrow:hover { background: var(--tint); }
+.hrow .c { font: 700 1rem var(--font-mono); letter-spacing: .08em; overflow-wrap: anywhere; }
+.hrow .m { color: var(--muted); }
+.histhead span:nth-child(n+2), .hrow span:nth-child(n+2) { text-align: right; }
+
+/* Batch table */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 360px; font-variant-numeric: tabular-nums; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+tbody tr:last-child td { border-bottom: 0; }
+th { font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n, th.n { text-align: right; }
+td.code { font: 700 .95rem var(--font-mono); letter-spacing: .08em; }
+td.warncell { color: var(--warn); background: var(--warn-bg); }
+tfoot th, tfoot td { border-top: 2px solid var(--line); border-bottom: 0; font-weight: 700; color: var(--fg); text-transform: none; letter-spacing: 0; font-size: .95rem; }
+
+/* Encode */
+.codeout { font: 700 clamp(1.8rem, 8vw, 2.6rem)/1.2 var(--font-mono); letter-spacing: .1em; overflow-wrap: anywhere; margin-top: 4px; }
+
+/* Key editor */
+.keyedit { display: grid; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+.keyrow { display: flex; gap: 10px; flex-wrap: wrap; }
+.keyrow input { flex: 1 1 200px; width: auto; font: 700 1rem var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.err { color: var(--warn); font-size: .9rem; min-height: 1.2em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Purchase Code Decoder</h1>
+    <p class="sub">Type the letter code from a product to see what you paid for it.</p>
+  </header>
+
+  <section aria-labelledby="keyTitle">
+    <div class="keyhead">
+      <span class="label" id="keyTitle">Your key</span>
+      <span class="keyword" id="keyWordShow"></span>
+    </div>
+    <div class="keystrip" id="keyStrip"></div>
+  </section>
+
+  <section class="rule" aria-label="Pricing rule">
+    <div class="field">
+      <label class="label" for="margin">Margin %</label>
+      <input id="margin" type="number" inputmode="decimal" min="0" max="1000" step="any" value="20">
+    </div>
+    <div class="chips" id="marginChips" role="group" aria-label="Quick margin"></div>
+    <div class="field">
+      <label class="label" for="step">Round up to</label>
+      <select id="step">
+        <option value="1">Rs 1</option>
+        <option value="5">Rs 5</option>
+        <option value="10">Rs 10</option>
+        <option value="50">Rs 50</option>
+        <option value="100">Rs 100</option>
+      </select>
+    </div>
+  </section>
+
+  <main>
+    <div class="tabs" role="tablist" aria-label="Tools">
+      <button class="tab" role="tab" id="tab-decode" aria-selected="true" aria-controls="panel-decode" type="button">Decode</button>
+      <button class="tab" role="tab" id="tab-batch" aria-selected="false" aria-controls="panel-batch" type="button">Batch</button>
+      <button class="tab" role="tab" id="tab-encode" aria-selected="false" aria-controls="panel-encode" type="button">Encode</button>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-decode" aria-labelledby="tab-decode">
+      <div class="field">
+        <label class="label" for="code">Code on the product</label>
+        <input id="code" class="codein" type="text" value="GIEH" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="sampleHint">
+        <p class="hint" id="sampleHint">GIEH is a sample code. Replace it with one from your stock.</p>
+      </div>
+      <div id="decodeOut" aria-live="polite"></div>
+      <div class="actions">
+        <button class="btn" id="saveBtn" type="button">Save to list</button>
+        <span class="status" id="saveStatus" aria-live="polite"></span>
+      </div>
+      <div>
+        <div class="keyhead"><h2>Saved codes</h2><button class="btn ghost" id="clearHist" type="button" hidden>Clear all</button></div>
+        <div id="history"></div>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-batch" aria-labelledby="tab-batch" hidden>
+      <div class="field">
+        <label class="label" for="batchIn">Codes, one per line</label>
+        <textarea id="batchIn" rows="7" autocapitalize="characters" spellcheck="false" aria-describedby="batchHint">GIEH
+OEH
+LDH
+DFEH
+ABH</textarea>
+        <p class="hint" id="batchHint">Sample lines. ABH is there on purpose: A and B are not in the key, so it is flagged.</p>
+      </div>
+      <div id="batchOut" aria-live="polite"></div>
+      <div class="actions">
+        <button class="btn" id="copyBatch" type="button">Copy results</button>
+        <span class="status" id="batchStatus" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-encode" aria-labelledby="tab-encode" hidden>
+      <div class="field">
+        <label class="label" for="costIn">Purchase cost in Rs</label>
+        <input id="costIn" class="codein" type="text" inputmode="numeric" value="1850" autocomplete="off" aria-describedby="encodeHint" style="text-transform:none">
+        <p class="hint" id="encodeHint">1850 is a sample. Type a cost to get the code to write on the product.</p>
+      </div>
+      <div id="encodeOut" aria-live="polite"></div>
+      <div class="actions">
+        <button class="btn" id="copyCode" type="button">Copy code</button>
+        <span class="status" id="codeStatus" aria-live="polite"></span>
+      </div>
+    </div>
+  </main>
+
+  <section class="keyedit" aria-labelledby="keyEditTitle">
+    <h2 id="keyEditTitle">Change the key word</h2>
+    <p class="hint">Needs 10 different letters. Letter 1 to 9 become digits 1 to 9, the 10th becomes 0. Changing it changes how every code is read, so codes already on your products will not match a new key.</p>
+    <div class="keyrow">
+      <input id="keyWord" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Key word">
+      <button class="btn" id="keyApply" type="button">Apply</button>
+      <button class="btn ghost" id="keyReset" type="button">Reset to GOLDENFISH</button>
+    </div>
+    <div class="err" id="keyErr" role="status"></div>
+  </section>
+</div>
+
+<script>
+/* PURE:START */
+var DEFAULT_KEY = 'GOLDENFISH';
+function buildMaps(key) {
+  var toDigit = {}, toLetter = {};
+  for (var i = 0; i < 10; i++) {
+    var d = String((i + 1) % 10);
+    toDigit[key[i]] = d;
+    toLetter[d] = key[i];
+  }
+  return { toDigit: toDigit, toLetter: toLetter };
+}
+function validKey(k) {
+  return /^[A-Z]{10}$/.test(k) && new Set(k.split('')).size === 10;
+}
+function decodeCode(raw, maps) {
+  var s = String(raw).toUpperCase().replace(/[\s\-._\/]/g, '');
+  if (!s) return { empty: true, items: [], bad: [], cost: null, tooLong: false };
+  var items = [], bad = [], digits = '';
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    var d = Object.prototype.hasOwnProperty.call(maps.toDigit, ch) ? maps.toDigit[ch] : null;
+    if (d === null) {
+      items.push({ ch: ch, d: null });
+      if (bad.indexOf(ch) === -1) bad.push(ch);
+    } else {
+      items.push({ ch: ch, d: d });
+      digits += d;
+    }
+  }
+  var tooLong = digits.length > 12;
+  return { empty: false, items: items, bad: bad, tooLong: tooLong, cost: (bad.length || tooLong) ? null : Number(digits) };
+}
+function encodeCost(raw, maps) {
+  var s = String(raw).replace(/[,\s]/g, '');
+  if (!s) return { empty: true };
+  if (!/^\d+$/.test(s)) return { error: 'Digits only, 0 to 9.' };
+  if (s.length > 12) return { error: 'That number is too long.' };
+  return { code: s.split('').map(function (d) { return maps.toLetter[d]; }).join('') };
+}
+function sellPrice(cost, margin, step) {
+  var p = cost * (100 + margin) / 100;
+  p = Math.round(p * 100) / 100;
+  return Math.ceil(p / step) * step;
+}
+/* PURE:END */
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  var store = {
+    load: function (k, f) {
+      try { var v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch (e) { return f; }
+    },
+    save: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  var nf;
+  try { nf = new Intl.NumberFormat('en-PK'); } catch (e) { nf = new Intl.NumberFormat(); }
+  function rs(n) { return 'Rs ' + nf.format(n); }
+
+  var key = store.load('pcd-key', DEFAULT_KEY);
+  if (typeof key !== 'string' || !validKey(key)) key = DEFAULT_KEY;
+  var margin = Number(store.load('pcd-margin', 20));
+  if (!isFinite(margin) || margin < 0 || margin > 1000) margin = 20;
+  var step = Number(store.load('pcd-step', 10));
+  if ([1, 5, 10, 50, 100].indexOf(step) === -1) step = 10;
+  var history = store.load('pcd-history', []);
+  if (!Array.isArray(history)) history = [];
+  history = history.filter(function (h) {
+    return h && typeof h.code === 'string' && isFinite(h.cost) && isFinite(h.sell);
+  }).slice(0, 30);
+  var maps = buildMaps(key);
+  var encoded = '';
+
+  function flash(el, msg) {
+    el.textContent = msg;
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.textContent = ''; }, 2600);
+  }
+  function copyText(text, statusEl) {
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        flash(statusEl, ok ? 'Copied' : 'Copy was blocked. Select the text and copy it.');
+      } catch (e) { flash(statusEl, 'Copy was blocked. Select the text and copy it.'); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { flash(statusEl, 'Copied'); }, fallback);
+    } else { fallback(); }
+  }
+
+  /* Key strip */
+  function renderKey() {
+    $('keyWordShow').textContent = key;
+    $('keyStrip').innerHTML = key.split('').map(function (l, i) {
+      return '<div class="cell" data-letter="' + l + '" data-used="false"><span class="l">' + l + '</span><span class="d">' + ((i + 1) % 10) + '</span></div>';
+    }).join('');
+    $('keyWord').value = key;
+  }
+  function markUsed(set) {
+    var cells = $('keyStrip').children;
+    for (var i = 0; i < cells.length; i++) {
+      cells[i].setAttribute('data-used', set.has(cells[i].getAttribute('data-letter')) ? 'true' : 'false');
+    }
+  }
+
+  /* Decode */
+  function renderDecode() {
+    var r = decodeCode($('code').value, maps);
+    var used = new Set(r.items.filter(function (i) { return i.d !== null; }).map(function (i) { return i.ch; }));
+    markUsed(used);
+    var out = $('decodeOut');
+    if (r.empty) {
+      out.innerHTML = '<p class="empty">Type a code to see the purchase cost.</p>';
+      $('saveBtn').disabled = true;
+      return;
+    }
+    var pairs = r.items.map(function (i) {
+      return '<li class="pair' + (i.d === null ? ' bad' : '') + '"><span>' + esc(i.ch) + '</span><span aria-hidden="true">→</span><span>' + (i.d === null ? '?' : i.d) + '</span></li>';
+    }).join('');
+    var note = '', costTxt = '—', sellTxt = '—', profitTxt = '';
+    if (r.bad.length) {
+      note = '<div class="note">Not in the key ' + esc(key) + ': ' + r.bad.map(esc).join(', ') + '. Check the code on the product.</div>';
+    } else if (r.tooLong) {
+      note = '<div class="note">This code is too long to be a price. Check it.</div>';
+    } else {
+      var sell = sellPrice(r.cost, margin, step);
+      var profit = sell - r.cost;
+      costTxt = rs(r.cost);
+      sellTxt = rs(sell);
+      profitTxt = 'Profit ' + rs(profit) + (r.cost > 0 ? ' (' + (profit / r.cost * 100).toFixed(1) + '%)' : '');
+    }
+    out.innerHTML =
+      '<div class="result">' +
+        '<div><div class="label">Purchase cost</div><div class="big">' + costTxt + '</div></div>' +
+        '<div><div class="label">Selling price at ' + margin + '%</div><div class="big sell">' + sellTxt + '</div><div class="profit">' + profitTxt + '</div></div>' +
+      '</div>' +
+      '<ul class="pairs" style="margin-top:12px" aria-label="Letter to digit">' + pairs + '</ul>' + (note ? '<div style="margin-top:12px">' + note + '</div>' : '');
+    $('saveBtn').disabled = !!(r.bad.length || r.tooLong);
+  }
+
+  function saveCurrent() {
+    var r = decodeCode($('code').value, maps);
+    if (r.empty || r.bad.length || r.tooLong) return;
+    var code = r.items.map(function (i) { return i.ch; }).join('');
+    var sell = sellPrice(r.cost, margin, step);
+    history = history.filter(function (h) { return h.code !== code; });
+    history.unshift({ code: code, cost: r.cost, sell: sell, margin: margin });
+    history = history.slice(0, 30);
+    store.save('pcd-history', history);
+    renderHistory();
+    flash($('saveStatus'), 'Saved');
+  }
+
+  function renderHistory() {
+    var box = $('history');
+    if (!history.length) {
+      box.innerHTML = '<p class="empty">Saved codes appear here. Decode a code, then press Save to list.</p>';
+      $('clearHist').hidden = true;
+      return;
+    }
+    $('clearHist').hidden = false;
+    box.innerHTML =
+      '<div class="histhead label"><span>Code</span><span>Cost</span><span>Selling</span></div>' +
+      history.map(function (h) {
+        return '<button class="hrow" type="button" data-code="' + esc(h.code) + '" title="Load this code"><span class="c">' + esc(h.code) + '</span><span>' + rs(h.cost) + '</span><span class="m">' + rs(h.sell) + '</span></button>';
+      }).join('');
+  }
+
+  /* Batch */
+  var lastBatchText = '';
+  function renderBatch() {
+    var lines = $('batchIn').value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var out = $('batchOut');
+    if (!lines.length) {
+      out.innerHTML = '<p class="empty">Paste one code per line.</p>';
+      lastBatchText = '';
+      $('copyBatch').disabled = true;
+      return;
+    }
+    $('copyBatch').disabled = false;
+    var okN = 0, badN = 0, tc = 0, ts = 0, rows = '', txt = [];
+    lines.forEach(function (line) {
+      var r = decodeCode(line, maps);
+      if (r.empty || r.bad.length || r.tooLong) {
+        badN++;
+        var why = r.empty ? 'No code' : r.tooLong ? 'Too long' : 'Not in key: ' + r.bad.map(esc).join(', ');
+        rows += '<tr><td class="code">' + esc(line) + '</td><td class="warncell" colspan="2">' + why + '</td></tr>';
+        txt.push(line + '\t?\t?');
+      } else {
+        var sell = sellPrice(r.cost, margin, step);
+        okN++; tc += r.cost; ts += sell;
+        rows += '<tr><td class="code">' + esc(line) + '</td><td class="n">' + rs(r.cost) + '</td><td class="n">' + rs(sell) + '</td></tr>';
+        txt.push(line + '\t' + r.cost + '\t' + sell);
+      }
+    });
+    lastBatchText = txt.join('\n');
+    out.innerHTML =
+      '<div class="tablewrap"><table><thead><tr><th>Code</th><th class="n">Cost</th><th class="n">Selling at ' + margin + '%</th></tr></thead><tbody>' + rows + '</tbody>' +
+      '<tfoot><tr><th>Total, ' + okN + (okN === 1 ? ' code' : ' codes') + '</th><td class="n">' + rs(tc) + '</td><td class="n">' + rs(ts) + '</td></tr></tfoot></table></div>' +
+      (badN ? '<p class="hint" style="margin-top:8px">' + badN + (badN === 1 ? ' line was' : ' lines were') + ' left out of the total.</p>' : '');
+  }
+
+  /* Encode */
+  function renderEncode() {
+    var r = encodeCost($('costIn').value, maps);
+    var out = $('encodeOut');
+    encoded = '';
+    if (r.empty) {
+      out.innerHTML = '<p class="empty">Type a cost to get its code.</p>';
+    } else if (r.error) {
+      out.innerHTML = '<div class="note">' + esc(r.error) + '</div>';
+    } else {
+      encoded = r.code;
+      out.innerHTML = '<div class="result"><div><div class="label">Write this on the product</div><div class="codeout">' + esc(r.code) + '</div></div></div>';
+    }
+    $('copyCode').disabled = !encoded;
+  }
+
+  /* Pricing controls */
+  function renderChips() {
+    $('marginChips').innerHTML = [10, 15, 20, 25, 30].map(function (m) {
+      return '<button class="chip" type="button" data-m="' + m + '" aria-pressed="' + (m === margin) + '">' + m + '%</button>';
+    }).join('');
+  }
+  function refreshPricing() {
+    renderChips();
+    renderDecode();
+    renderBatch();
+  }
+
+  /* Events */
+  $('code').addEventListener('input', function () {
+    $('sampleHint').hidden = true;
+    renderDecode();
+  });
+  $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') saveCurrent(); });
+  $('saveBtn').addEventListener('click', saveCurrent);
+
+  $('history').addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('.hrow') : null;
+    if (!row) return;
+    $('code').value = row.getAttribute('data-code');
+    $('sampleHint').hidden = true;
+    renderDecode();
+    $('code').focus();
+  });
+  var clearArmed = false, clearTimer;
+  $('clearHist').addEventListener('click', function () {
+    var b = $('clearHist');
+    if (!clearArmed) {
+      clearArmed = true;
+      b.textContent = 'Tap again to clear';
+      clearTimer = setTimeout(function () { clearArmed = false; b.textContent = 'Clear all'; }, 3000);
+    } else {
+      clearTimeout(clearTimer);
+      clearArmed = false;
+      b.textContent = 'Clear all';
+      history = [];
+      store.save('pcd-history', history);
+      renderHistory();
+    }
+  });
+
+  $('margin').value = margin;
+  $('step').value = String(step);
+  $('margin').addEventListener('input', function () {
+    var v = parseFloat($('margin').value);
+    margin = isFinite(v) ? Math.min(Math.max(v, 0), 1000) : 0;
+    store.save('pcd-margin', margin);
+    refreshPricing();
+  });
+  $('marginChips').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.chip') : null;
+    if (!b) return;
+    margin = Number(b.getAttribute('data-m'));
+    $('margin').value = margin;
+    store.save('pcd-margin', margin);
+    refreshPricing();
+  });
+  $('step').addEventListener('change', function () {
+    step = Number($('step').value);
+    store.save('pcd-step', step);
+    refreshPricing();
+  });
+
+  $('batchIn').addEventListener('input', function () { $('batchHint').hidden = true; renderBatch(); });
+  $('copyBatch').addEventListener('click', function () { if (lastBatchText) copyText(lastBatchText, $('batchStatus')); });
+
+  $('costIn').addEventListener('input', function () { $('encodeHint').hidden = true; renderEncode(); });
+  $('copyCode').addEventListener('click', function () { if (encoded) copyText(encoded, $('codeStatus')); });
+
+  function applyKey(k) {
+    key = k;
+    maps = buildMaps(key);
+    store.save('pcd-key', key);
+    renderKey();
+    renderDecode();
+    renderBatch();
+    renderEncode();
+  }
+  $('keyApply').addEventListener('click', function () {
+    var k = $('keyWord').value.trim().toUpperCase();
+    var err = $('keyErr');
+    if (!/^[A-Z]+$/.test(k)) { err.textContent = 'Use letters A to Z only.'; return; }
+    if (k.length !== 10) { err.textContent = 'The key word needs exactly 10 letters. You typed ' + k.length + '.'; return; }
+    var seen = {}, dup = [];
+    k.split('').forEach(function (c) { if (seen[c] && dup.indexOf(c) === -1) dup.push(c); seen[c] = true; });
+    if (dup.length) { err.textContent = 'Each letter can appear once. Repeated: ' + dup.join(', ') + '.'; return; }
+    err.textContent = '';
+    applyKey(k);
+    flash(err, 'Key changed to ' + k + '.');
+  });
+  $('keyReset').addEventListener('click', function () {
+    $('keyErr').textContent = '';
+    applyKey(DEFAULT_KEY);
+    flash($('keyErr'), 'Key reset to ' + DEFAULT_KEY + '.');
+  });
+
+  /* Tabs */
+  var tabs = ['decode', 'batch', 'encode'];
+  function showTab(name) {
+    tabs.forEach(function (t) {
+      $('tab-' + t).setAttribute('aria-selected', String(t === name));
+      $('panel-' + t).hidden = t !== name;
+    });
+  }
+  tabs.forEach(function (t) {
+    $('tab-' + t).addEventListener('click', function () { showTab(t); });
+  });
+
+  /* Start */
+  renderKey();
+  renderChips();
+  renderHistory();
+  renderDecode();
+  renderBatch();
+  renderEncode();
+})();
+</script>
+
+</body></html>
