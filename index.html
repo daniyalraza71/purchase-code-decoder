@@ -1,6 +1,13 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Code Decoder">
+<meta name="theme-color" content="#1D4EA8">
 <title>Purchase Code Decoder</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <style>
 /* Layout: one narrow column like a ledger page. Key strip on top, pricing rule, tabbed tool, saved list inside Decode. */
@@ -19,6 +26,7 @@
   --warn: #9A4A06;
   --warn-bg: #FDF0D5;
   --ok: #0B6B50;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -155,6 +163,8 @@ tfoot th, tfoot td { border-top: 2px solid var(--line); border-bottom: 0; font-w
 .err { color: var(--warn); font-size: .9rem; min-height: 1.2em; }
 </style>
 
+</head>
+<body>
 <div class="wrap">
   <header>
     <h1>Purchase Code Decoder</h1>
@@ -197,8 +207,8 @@ tfoot th, tfoot td { border-top: 2px solid var(--line); border-bottom: 0; font-w
     <div class="panel" role="tabpanel" id="panel-decode" aria-labelledby="tab-decode">
       <div class="field">
         <label class="label" for="code">Code on the product</label>
-        <input id="code" class="codein" type="text" value="GIEH" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="sampleHint">
-        <p class="hint" id="sampleHint">GIEH is a sample code. Replace it with one from your stock.</p>
+        <input id="code" class="codein" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="sampleHint">
+        <p class="hint" id="sampleHint">Type the code exactly as it is written on the product.</p>
       </div>
       <div id="decodeOut" aria-live="polite"></div>
       <div class="actions">
@@ -214,12 +224,8 @@ tfoot th, tfoot td { border-top: 2px solid var(--line); border-bottom: 0; font-w
     <div class="panel" role="tabpanel" id="panel-batch" aria-labelledby="tab-batch" hidden>
       <div class="field">
         <label class="label" for="batchIn">Codes, one per line</label>
-        <textarea id="batchIn" rows="7" autocapitalize="characters" spellcheck="false" aria-describedby="batchHint">GIEH
-OEH
-LDH
-DFEH
-ABH</textarea>
-        <p class="hint" id="batchHint">Sample lines. ABH is there on purpose: A and B are not in the key, so it is flagged.</p>
+        <textarea id="batchIn" rows="7" autocapitalize="characters" spellcheck="false" aria-describedby="batchHint"></textarea>
+        <p class="hint" id="batchHint">One code per line. A code with a letter that is not in your key is flagged.</p>
       </div>
       <div id="batchOut" aria-live="polite"></div>
       <div class="actions">
@@ -231,8 +237,8 @@ ABH</textarea>
     <div class="panel" role="tabpanel" id="panel-encode" aria-labelledby="tab-encode" hidden>
       <div class="field">
         <label class="label" for="costIn">Purchase cost in Rs</label>
-        <input id="costIn" class="codein" type="text" inputmode="numeric" value="1850" autocomplete="off" aria-describedby="encodeHint" style="text-transform:none">
-        <p class="hint" id="encodeHint">1850 is a sample. Type a cost to get the code to write on the product.</p>
+        <input id="costIn" class="codein" type="text" inputmode="numeric" autocomplete="off" aria-describedby="encodeHint" style="text-transform:none">
+        <p class="hint" id="encodeHint">Type a cost to get the code to write on the product.</p>
       </div>
       <div id="encodeOut" aria-live="polite"></div>
       <div class="actions">
@@ -244,11 +250,11 @@ ABH</textarea>
 
   <section class="keyedit" aria-labelledby="keyEditTitle">
     <h2 id="keyEditTitle">Change the key word</h2>
-    <p class="hint">Needs 10 different letters. Letter 1 to 9 become digits 1 to 9, the 10th becomes 0. Changing it changes how every code is read, so codes already on your products will not match a new key.</p>
+    <p class="hint">Needs 10 different letters. Letter 1 to 9 become digits 1 to 9, the 10th becomes 0. Changing it changes how every code is read, so codes already on your products will not match a new key. The key is saved only in this browser. It is not part of the page code.</p>
     <div class="keyrow">
       <input id="keyWord" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Key word">
       <button class="btn" id="keyApply" type="button">Apply</button>
-      <button class="btn ghost" id="keyReset" type="button">Reset to GOLDENFISH</button>
+      <button class="btn ghost" id="keyReset" type="button">Remove key</button>
     </div>
     <div class="err" id="keyErr" role="status"></div>
   </section>
@@ -256,9 +262,10 @@ ABH</textarea>
 
 <script>
 /* PURE:START */
-var DEFAULT_KEY = 'GOLDENFISH';
+var DEFAULT_KEY = '';
 function buildMaps(key) {
   var toDigit = {}, toLetter = {};
+  if (!key) return { toDigit: toDigit, toLetter: toLetter };
   for (var i = 0; i < 10; i++) {
     var d = String((i + 1) % 10);
     toDigit[key[i]] = d;
@@ -306,6 +313,7 @@ function sellPrice(cost, margin, step) {
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
+  var NOKEY = '<div class="note">Set your key word first. <a href="#keyEditTitle" style="color:inherit">Go to key word</a></div>';
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -361,8 +369,8 @@ function sellPrice(cost, margin, step) {
 
   /* Key strip */
   function renderKey() {
-    $('keyWordShow').textContent = key;
-    $('keyStrip').innerHTML = key.split('').map(function (l, i) {
+    $('keyWordShow').textContent = key || 'Not set';
+    $('keyStrip').innerHTML = (key || '----------').split('').map(function (l, i) {
       return '<div class="cell" data-letter="' + l + '" data-used="false"><span class="l">' + l + '</span><span class="d">' + ((i + 1) % 10) + '</span></div>';
     }).join('');
     $('keyWord').value = key;
@@ -376,6 +384,7 @@ function sellPrice(cost, margin, step) {
 
   /* Decode */
   function renderDecode() {
+    if (!key) { $('decodeOut').innerHTML = NOKEY; $('saveBtn').disabled = true; markUsed(new Set()); return; }
     var r = decodeCode($('code').value, maps);
     var used = new Set(r.items.filter(function (i) { return i.d !== null; }).map(function (i) { return i.ch; }));
     markUsed(used);
@@ -442,6 +451,7 @@ function sellPrice(cost, margin, step) {
   function renderBatch() {
     var lines = $('batchIn').value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
     var out = $('batchOut');
+    if (!key) { out.innerHTML = NOKEY; lastBatchText = ''; $('copyBatch').disabled = true; return; }
     if (!lines.length) {
       out.innerHTML = '<p class="empty">Paste one code per line.</p>';
       lastBatchText = '';
@@ -476,6 +486,7 @@ function sellPrice(cost, margin, step) {
     var r = encodeCost($('costIn').value, maps);
     var out = $('encodeOut');
     encoded = '';
+    if (!key) { out.innerHTML = NOKEY; $('copyCode').disabled = true; return; }
     if (r.empty) {
       out.innerHTML = '<p class="empty">Type a cost to get its code.</p>';
     } else if (r.error) {
@@ -584,7 +595,7 @@ function sellPrice(cost, margin, step) {
   $('keyReset').addEventListener('click', function () {
     $('keyErr').textContent = '';
     applyKey(DEFAULT_KEY);
-    flash($('keyErr'), 'Key reset to ' + DEFAULT_KEY + '.');
+    flash($('keyErr'), 'Key removed from this browser.');
   });
 
   /* Tabs */
@@ -608,5 +619,5 @@ function sellPrice(cost, margin, step) {
   renderEncode();
 })();
 </script>
-
-</body></html>
+</body>
+</html>
